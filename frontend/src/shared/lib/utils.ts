@@ -1,12 +1,12 @@
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export function formatMoveCount(count: number): string {
-  return `${count} move${count !== 1 ? 's' : ''}`;
+  return `${count} move${count !== 1 ? "s" : ""}`;
 }
 
 export function formatTime(seconds: number): string {
@@ -18,7 +18,7 @@ export function formatTime(seconds: number): string {
 
 export function debounce<T extends (...args: unknown[]) => unknown>(
   fn: T,
-  delay: number
+  delay: number,
 ): (...args: Parameters<T>) => void {
   let timeoutId: ReturnType<typeof setTimeout>;
   return (...args: Parameters<T>) => {

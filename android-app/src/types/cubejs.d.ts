@@ -1,4 +1,4 @@
-declare module 'cubejs' {
+declare module "cubejs" {
   export default class Cube {
     readonly center: number[];
     readonly cp: number[];

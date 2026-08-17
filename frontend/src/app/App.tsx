@@ -1,7 +1,7 @@
-import { Routes, Route } from 'react-router-dom';
-import { ReviewColorsPage } from '@pages/ReviewColors';
-import { SolvingPage } from '@pages/Solving';
-import { Layout } from '@shared/ui/Layout';
+import { Routes, Route } from "react-router-dom";
+import { ReviewColorsPage } from "@pages/ReviewColors";
+import { SolvingPage } from "@pages/Solving";
+import { Layout } from "@shared/ui/Layout";
 
 function App() {
   return (
