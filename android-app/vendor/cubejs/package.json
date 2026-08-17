@@ -1,0 +1,7 @@
+{
+  "name": "cubejs",
+  "version": "1.3.2",
+  "description": "Vendored CubeJS 1.3.2 runtime without the unused npm CLI dependency",
+  "main": "index.js",
+  "license": "MIT"
+}

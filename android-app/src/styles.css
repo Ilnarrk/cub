@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #08090c; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; min-width: 320px; overscroll-behavior: none; background: radial-gradient(circle at 20% 0, rgba(124,92,255,.18), transparent 28rem), #08090c; }
+button { touch-action: manipulation; }
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.card { border: 1px solid rgba(255,255,255,.08); border-radius: 22px; background: rgba(255,255,255,.045); box-shadow: 0 24px 80px rgba(0,0,0,.28); }
+.action { min-height: 48px; border-radius: 14px; padding: 0 16px; font-size: 14px; font-weight: 700; transition: .18s; }
+.action:disabled { opacity: .4; }
+.action-primary { background: linear-gradient(135deg,#7c5cff,#5b8cff); color: white; }
+.action-secondary { border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.06); color: white; }
+canvas { display: block; touch-action: none; }

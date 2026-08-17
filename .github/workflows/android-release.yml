@@ -1,0 +1,189 @@
+name: Android release
+
+on:
+  push:
+    tags:
+      - 'android-v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag, for example android-v1.0.0'
+        required: true
+        type: string
+      prerelease:
+        description: 'Publish as a pre-release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build signed APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: android-app/package-lock.json
+          package-manager-cache: true
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            android-app/android/*.gradle
+            android-app/android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Install Android SDK 36
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Resolve release version
+        env:
+          MANUAL_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            release_tag="${GITHUB_REF_NAME}"
+          else
+            release_tag="${MANUAL_TAG}"
+          fi
+
+          if [[ ! "${release_tag}" =~ ^android-v([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must look like android-v1.2.3 or android-v1.2.3-rc.1" >&2
+            exit 1
+          fi
+
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          version_name="${release_tag#android-v}"
+          version_code=$((10#${major} * 1000000 + 10#${minor} * 1000 + 10#${patch}))
+
+          if (( version_code < 1 || version_code > 2100000000 )); then
+            echo "Calculated Android versionCode is outside the supported range" >&2
+            exit 1
+          fi
+
+          echo "RELEASE_TAG=${release_tag}" >> "${GITHUB_ENV}"
+          echo "VERSION_NAME=${version_name}" >> "${GITHUB_ENV}"
+          echo "VERSION_CODE=${version_code}" >> "${GITHUB_ENV}"
+          echo "APK_NAME=CubeSolver-${release_tag}.apk" >> "${GITHUB_ENV}"
+
+      - name: Install JavaScript dependencies
+        working-directory: android-app
+        run: npm ci
+
+      - name: Test offline solver
+        working-directory: android-app
+        run: npm test
+
+      - name: Audit production dependencies
+        working-directory: android-app
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Build web assets and synchronize Capacitor
+        working-directory: android-app
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: Configure release signing
+        working-directory: android-app
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "Required Android signing secret ${name} is not configured" >&2
+              exit 1
+            fi
+          done
+
+          keystore_path="${RUNNER_TEMP}/cubesolver-release.jks"
+          printf '%s' "${KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
+          chmod 600 "${keystore_path}"
+
+          {
+            printf 'storeFile=%s\n' "${keystore_path}"
+            printf 'storePassword=%s\n' "${KEYSTORE_PASSWORD}"
+            printf 'keyAlias=%s\n' "${KEY_ALIAS}"
+            printf 'keyPassword=%s\n' "${KEY_PASSWORD}"
+          } > android/keystore.properties
+          chmod 600 android/keystore.properties
+
+      - name: Build signed release APK
+        working-directory: android-app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleRelease \
+            -PVERSION_NAME="${VERSION_NAME}" \
+            -PVERSION_CODE="${VERSION_CODE}"
+
+      - name: Verify and checksum APK
+        working-directory: android-app
+        run: |
+          source_apk='android/app/build/outputs/apk/release/app-release.apk'
+          output_dir="${RUNNER_TEMP}/cubesolver-release"
+          mkdir -p "${output_dir}"
+          cp "${source_apk}" "${output_dir}/${APK_NAME}"
+          "${ANDROID_HOME}/build-tools/36.0.0/apksigner" verify --verbose --print-certs "${output_dir}/${APK_NAME}"
+          sha256sum "${output_dir}/${APK_NAME}" > "${output_dir}/${APK_NAME}.sha256"
+          echo "RELEASE_DIR=${output_dir}" >> "${GITHUB_ENV}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: CubeSolver-${{ env.RELEASE_TAG }}
+          path: |
+            ${{ env.RELEASE_DIR }}/${{ env.APK_NAME }}
+            ${{ env.RELEASE_DIR }}/${{ env.APK_NAME }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANUAL_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          prerelease_args=()
+          if [[ "${MANUAL_PRERELEASE}" == "true" || "${RELEASE_TAG}" == *-* ]]; then
+            prerelease_args+=(--prerelease)
+          fi
+
+          apk="${RELEASE_DIR}/${APK_NAME}"
+          checksum="${apk}.sha256"
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "${apk}" "${checksum}" --clobber
+          else
+            gh release create "${RELEASE_TAG}" "${apk}" "${checksum}" \
+              --target "${GITHUB_SHA}" \
+              --title "CubeSolver Android ${VERSION_NAME}" \
+              --generate-notes \
+              "${prerelease_args[@]}"
+          fi
