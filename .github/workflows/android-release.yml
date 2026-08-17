@@ -42,7 +42,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: android-app/package-lock.json
+          cache-dependency-path: |
+            android-app/package-lock.json
+            frontend/package-lock.json
           package-manager-cache: true
 
       - name: Set up Java
@@ -92,8 +94,9 @@ jobs:
           echo "APK_NAME=CubeSolver-${release_tag}.apk" >> "${GITHUB_ENV}"
 
       - name: Install JavaScript dependencies
-        working-directory: android-app
-        run: npm ci
+        run: |
+          npm ci --prefix android-app
+          npm ci --prefix frontend
 
       - name: Test offline solver
         working-directory: android-app
