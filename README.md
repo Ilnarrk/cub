@@ -7,12 +7,24 @@ moves.
 ## Development
 
 ```powershell
-docker compose up --build
+docker compose -f docker-compose.dev.yml up --build
 ```
 
 The frontend is available at `http://localhost:5174` by default; API
 documentation is at `http://localhost:8000/docs`. Set `FRONTEND_PORT` to use
 another available host port.
+
+## Production
+
+Build and run the production stack locally:
+
+```powershell
+docker compose up --build -d
+```
+
+The app is served on `http://localhost` (port 80). The frontend container
+serves static assets with nginx and proxies `/api` to the backend. Set
+`FRONTEND_PORT` to publish on another host port.
 
 The application deliberately has no automatic photo recognition. Start with an
 empty 3D cube, colour its six centres as on the physical cube, then fill the

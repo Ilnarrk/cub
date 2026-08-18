@@ -32,7 +32,17 @@ The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`.
 3. Run `npm run android:release`.
 
 The signed APK is written to `android/app/build/outputs/apk/release/app-release.apk`. Without
-`keystore.properties`, Gradle can still create an unsigned release artifact.
+`keystore.properties`, the release build fails on purpose because unsigned APKs cannot be installed
+on most devices.
+
+## Troubleshooting install errors
+
+If Android shows **«Ошибка синтаксического анализа пакета»** / **Problem parsing the package**:
+
+1. Download the `.apk` asset from the GitHub Release, not the `.apk.sha256` checksum file.
+2. Make sure the device runs **Android 10 (API 29) or newer** — that is the app minimum.
+3. Re-download the APK if the file size does not match the published SHA-256 checksum.
+4. For sideloading, allow installation from your browser or file manager in system settings.
 
 ## GitHub Releases
 

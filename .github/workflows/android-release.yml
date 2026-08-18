@@ -115,27 +115,35 @@ jobs:
       - name: Configure release signing
         working-directory: android-app
         env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+          missing=()
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
             if [[ -z "${!name}" ]]; then
-              echo "Required Android signing secret ${name} is not configured" >&2
-              exit 1
+              missing+=("${name}")
             fi
           done
 
+          if (( ${#missing[@]} > 0 )); then
+            echo "Missing GitHub Actions secrets (Settings → Secrets and variables → Actions):" >&2
+            printf '  - %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
           keystore_path="${RUNNER_TEMP}/cubesolver-release.jks"
-          printf '%s' "${KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
+          keystore_b64="$(printf '%s' "${ANDROID_KEYSTORE_BASE64}" | tr -d '[:space:]')"
+          printf '%s' "${keystore_b64}" | base64 --decode > "${keystore_path}"
           chmod 600 "${keystore_path}"
+          keytool -list -keystore "${keystore_path}" -storepass "${ANDROID_KEYSTORE_PASSWORD}" >/dev/null
 
           {
             printf 'storeFile=%s\n' "${keystore_path}"
-            printf 'storePassword=%s\n' "${KEYSTORE_PASSWORD}"
-            printf 'keyAlias=%s\n' "${KEY_ALIAS}"
-            printf 'keyPassword=%s\n' "${KEY_PASSWORD}"
+            printf 'storePassword=%s\n' "${ANDROID_KEYSTORE_PASSWORD}"
+            printf 'keyAlias=%s\n' "${ANDROID_KEY_ALIAS}"
+            printf 'keyPassword=%s\n' "${ANDROID_KEY_PASSWORD}"
           } > android/keystore.properties
           chmod 600 android/keystore.properties
 
@@ -152,10 +160,23 @@ jobs:
         run: |
           source_apk='android/app/build/outputs/apk/release/app-release.apk'
           output_dir="${RUNNER_TEMP}/cubesolver-release"
+          output_apk="${output_dir}/${APK_NAME}"
+          build_tools="${ANDROID_HOME}/build-tools/36.0.0"
+
+          if [[ ! -f "${source_apk}" ]]; then
+            echo "Release APK was not produced at ${source_apk}" >&2
+            exit 1
+          fi
+
           mkdir -p "${output_dir}"
-          cp "${source_apk}" "${output_dir}/${APK_NAME}"
-          "${ANDROID_HOME}/build-tools/36.0.0/apksigner" verify --verbose --print-certs "${output_dir}/${APK_NAME}"
-          sha256sum "${output_dir}/${APK_NAME}" > "${output_dir}/${APK_NAME}.sha256"
+          cp "${source_apk}" "${output_apk}"
+
+          unzip -t "${output_apk}" >/dev/null
+          "${build_tools}/aapt" dump badging "${output_apk}" | head -n 5
+          "${build_tools}/zipalign" -c -v 4 "${output_apk}"
+          "${build_tools}/apksigner" verify --verbose --print-certs --min-sdk-version 21 "${output_apk}"
+
+          sha256sum "${output_apk}" > "${output_apk}.sha256"
           echo "RELEASE_DIR=${output_dir}" >> "${GITHUB_ENV}"
 
       - name: Upload workflow artifact
