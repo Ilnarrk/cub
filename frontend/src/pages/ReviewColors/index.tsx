@@ -209,8 +209,6 @@ export function ReviewColorsPage() {
   };
   const ready = localIssues.length === 0 && physicalCheck.valid;
 
-  const totalFilled = FACE_NAMES.reduce((sum, color) => sum + counts[color], 0);
-
   return (
     <section className="space-y-7">
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">

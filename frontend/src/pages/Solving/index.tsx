@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  CheckCircle2,
   Pause,
   Play,
   RotateCcw,
